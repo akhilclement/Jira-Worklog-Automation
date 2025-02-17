@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const worklogController = require('../controllers/worklogController');
+const { getWeekDates } = require('../utils/dateUtils');
 
 router.get('/send-worklog-email/', async (req, res) => {
     try {
@@ -14,18 +15,60 @@ router.get('/send-worklog-email/', async (req, res) => {
     }
 });
 
-router.get('/weekly-summary', async (req, res) => {
+router.get('/user-worklogs', async (req, res) => {
     try {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - 7);
+        const { userId, startDate, endDate } = req.query;
         
-        await worklogController.sendWeeklyWorklogEmail(startDate.toISOString().split('T')[0], 
-                                                     endDate.toISOString().split('T')[0]);
-        res.json({ message: 'Weekly worklog summary sent successfully' });
+        if (!userId || !startDate || !endDate) {
+            return res.status(400).json({ 
+                error: 'Missing required parameters. Please provide userId, startDate, and endDate' 
+            });
+        }
+
+        const worklogs = await worklogController.fetchUserWorklogs(startDate, endDate, userId);
+        await worklogController.sendUserWorklogEmail(userId, startDate, endDate, worklogs);
+
+        res.json({
+            message: 'Worklog email sent successfully',
+            user: userId,
+            period: { startDate, endDate }
+        });
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to send weekly worklog summary' });
+        res.status(500).json({ 
+            error: 'Failed to fetch and send user worklogs',
+            details: error.message
+        });
+    }
+});
+
+router.get('/all-users-worklogs', async (req, res) => {
+    try {
+        const { weekNumber } = req.query;
+        
+        if (!weekNumber) {
+            return res.status(400).json({ 
+                error: 'Missing required parameter. Please provide weekNumber' 
+            });
+        }
+
+        const { startDate, endDate } = getWeekDates(parseInt(weekNumber));
+
+        await worklogController.sendAllUsersWorklogEmail(startDate, endDate, weekNumber);
+        res.json({
+            message: 'All users worklog email sent successfully',
+            period: { 
+                weekNumber,
+                startDate, 
+                endDate 
+            }
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ 
+            error: 'Failed to send all users worklog email',
+            details: error.message
+        });
     }
 });
 

@@ -10,9 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "jira-client": "^8.2.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.0"
   }
