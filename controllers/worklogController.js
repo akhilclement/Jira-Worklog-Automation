@@ -198,22 +198,42 @@ class WorklogController {
         `;
         
         // Group worklogs by date
+        // In both createUserWorklogEmailContent and createAllUsersWorklogEmailContent methods
         const worklogsByDate = worklogs.reduce((acc, log) => {
-            const date = new Date(log.started).toISOString().split('T')[0];
-            if (!acc[date]) {
-                acc[date] = {
+            // Convert to IST by adding 5 hours and 30 minutes to UTC
+            const date = new Date(log.started);
+            const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+            const formattedDate = istDate.toISOString().split('T')[0];
+            
+            if (!acc[formattedDate]) {
+                acc[formattedDate] = {
                     issues: [],
                     totalHours: 0
                 };
             }
-            // Inside the forEach loop where issues are added
-            acc[date].issues.push(
+            acc[formattedDate].issues.push(
                 `<a href="https://${process.env.JIRA_HOST}/browse/${log.issueKey}" style="color: #0052cc; text-decoration: none;">${log.issueKey}</a>: ${log.summary} [${(log.timeSpentSeconds / 3600).toFixed(2)}h]`
             );
-
-            acc[date].totalHours += log.timeSpentSeconds / 3600;
+            acc[formattedDate].totalHours += log.timeSpentSeconds / 3600;
             return acc;
         }, {});
+
+        // Add missing days between start and end date (excluding weekends)
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+            const dayOfWeek = d.getDay();
+            // Skip Saturday (6) and Sunday (0)
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                const currentDate = d.toISOString().split('T')[0];
+                if (!worklogsByDate[currentDate]) {
+                    worklogsByDate[currentDate] = {
+                        issues: ['Leave / Missing worklog'],
+                        totalHours: 0
+                    };
+                }
+            }
+        }
 
         // Sort dates
         const sortedDates = Object.keys(worklogsByDate).sort();
@@ -293,7 +313,8 @@ class WorklogController {
                 }
             }
 
-            return activeUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+            let finalList = activeUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+            return finalList;
         } catch (error) {
             console.error('Detailed error in getAllUsers:', error);
             throw new Error(`Failed to fetch users: ${error.message}`);
@@ -373,18 +394,40 @@ class WorklogController {
         </div>
         `;
         Object.entries(allWorklogs).forEach(([userName, userData]) => {
+            // First, create the worklogsByDate object as before
             const worklogsByDate = userData.worklogs.reduce((acc, log) => {
-                const date = new Date(log.started).toISOString().split('T')[0];
-                if (!acc[date]) {
-                    acc[date] = { issues: [], totalHours: 0 };
+                const date = new Date(log.started);
+                const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+                const formattedDate = istDate.toISOString().split('T')[0];
+                
+                if (!acc[formattedDate]) {
+                    acc[formattedDate] = { issues: [], totalHours: 0 };
                 }
-                // Inside the forEach loop where issues are added
-                acc[date].issues.push(
+                acc[formattedDate].issues.push(
                     `<a href="https://${process.env.JIRA_HOST}/browse/${log.issueKey}" style="color: #0052cc; text-decoration: none;">${log.issueKey}</a>: ${log.summary} [${log.timeSpent.toFixed(2)}h]`
                 );
-                acc[date].totalHours += log.timeSpent;
+                acc[formattedDate].totalHours += log.timeSpent;
                 return acc;
             }, {});
+    
+            // Add missing days between start and end date
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+                const dayOfWeek = d.getDay();
+                // Skip Saturday (6) and Sunday (0)
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    const currentDate = d.toISOString().split('T')[0];
+                    if (!worklogsByDate[currentDate]) {
+                        worklogsByDate[currentDate] = {
+                            issues: ['Leave / Missing worklog'],
+                            totalHours: 0
+                        };
+                    }
+                }
+            }
+    
+            // Rest of the code remains the same
             html += `
             <div class="user-section">
                 <h3>${userName} (${userData.email})</h3>
@@ -395,7 +438,7 @@ class WorklogController {
                         <th>Hours</th>
                     </tr>
             `;
-
+    
             let userTotal = 0;
             Object.entries(worklogsByDate)
                 .sort(([a], [b]) => a.localeCompare(b))
@@ -410,7 +453,7 @@ class WorklogController {
                     </tr>
                     `;
                 });
-
+    
             html += `
                     <tr class="total-row">
                         <td colspan="2">Total Hours</td>

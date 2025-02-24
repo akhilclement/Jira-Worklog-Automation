@@ -15,6 +15,14 @@ router.get('/send-worklog-email/', async (req, res) => {
     }
 });
 
+router.get('/all-user-list', async (req, res) => {
+    try {
+        await worklogController.getAllUsers()
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to all user list' });
+    }
+});
 router.get('/user-worklogs', async (req, res) => {
     try {
         const { userId, startDate, endDate } = req.query;
